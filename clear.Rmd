@@ -1,0 +1,30 @@
+# Імпорт бібліотек
+```{r import_lib, indent = "     " }
+library(tidyverse)
+```
+
+# Завантаження файлу, пере-визначення типів
+```{r load, indent = "    ", message = FALSE}
+data <- read_csv('data/dataset.csv')
+# data.mutat
+data <- data[,-2]
+data <- data %>% mutate(explicit = as.logical(explicit), track_genre = as.factor(track_genre),
+    mode = as.factor(mode))
+
+str(data)
+```
+
+# Відображення кількості рядків з не визначеними полями
+```{r passengers_na, indent = "    "}
+data %>% summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  select(where(~ all(.) > 0))
+
+```
+
+
+# Видалення рядків з не визначеними полями
+```{r remove_na, indent = "     "}
+    data <- data[rowSums(is.na(df)) == 0, ]
+```
+
+# ?
