@@ -2,6 +2,7 @@
 ```{r}
 source("cleaning.R")
 library(qqplotr)
+library(GGally)
 ```
 # Завантаження попередньо очищених даних
 ```{r}
@@ -274,4 +275,65 @@ data %>%
     ggplot(aes(x = log(speechiness))) +
     geom_histogram(color = "#e9ecef", alpha = 0.6, position = 'identity') +
     labs(fill = "")
+```
+# 5 найпопулярніших артистів
+```{r}
+most_popular_artists <-
+    data %>%
+    group_by(artists) %>%
+    summarise(popularity = sum(popularity)) %>%
+    arrange(desc(popularity)) %>%
+    head(5)
+```
+# 5 найпопулярніших альбомів
+```{r}
+most_popular_albums <-
+    data %>%
+    group_by(album_name) %>%
+    summarise(popularity = sum(popularity)) %>%
+    arrange(desc(popularity)) %>%
+    head(5)
+most_popular_albums
+```
+# Спільні харакетристики найпопулярніших альбомів 
+
+# 5 найпопулярніших жанрів
+```{r}
+most_popular_genres <-
+    data %>%
+    group_by(track_genre) %>%
+    summarise(popularity = sum(popularity)) %>%
+    arrange(desc(popularity)) %>%
+    head(5)
+
+most_popular_genres
+```
+# Графік кореляції числових змінних
+```{r}
+ggcorr(data %>% select(where(is.numeric)), label = TRUE)
+```
+# Залежність популярності від валентності (valence)
+```{r}
+ggcorr(data %>% select(popularity, valence), label = TRUE)
+```
+```{r}
+data %>%
+    tail(15) %>%
+    ggplot(aes(x = popularity, y = valence)) +
+        geom_line() +
+        geom_point()
+```
+# Вплив тривалості треку на його Енергійність
+```{r}
+ggcorr(data %>% select(duration_ms, energy), label = TRUE)
+```
+# Вплив темпу на мовність (speechiness)
+```{r}
+ggcorr(data %>% select(tempo, speechiness), label = TRUE)
+```
+# Вплив ненормативної лексики на мовність (speechiness)
+```{r}
+data %>%
+    ggplot(aes(x = explicit, y = speechiness)) +
+    geom_bar(stat = "identity")
 ```
