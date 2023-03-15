@@ -16,55 +16,49 @@ str(data)
 ```{r}
 summary(data)
 ```
+Фунція побудови box plots:
+```{r}
+
+box_plot <- function(data, aes_y, title_y, title_size, text_size) {
+  ggplot(data, aes_y) +
+    geom_boxplot() +
+    labs(y = title_y) +
+    theme(axis.title = element_text(size = title_size),
+        axis.text = element_text(size = text_size))
+}
+
+```
+
+
 ## Побудуємо box plots для деяких числових змінних:
 (зробити універсальну функцію)
 popularity:
 ```{r}
-ggplot(data, aes(y = popularity)) +
-    geom_boxplot() +
-    labs(y = "Популярність треків") +
-    theme(axis.title = element_text(size = 25),
-        axis.text = element_text(size = 20))
+box_plot(data, aes(y = popularity), "Popularity of tracks", 25,20)
 ```
 valence:
 ```{R}
-ggplot(data, aes(y = valence)) +
-    geom_boxplot() +
-    labs(y = "Валентність треків") +
-     theme(axis.title = element_text(size = 40),
-        axis.text = element_text(size = 40))
+box_plot(data, aes(y = valence), "Valence of tracks", 40,40)
+
 ```
 duration_ms: (треба переробити!)
 ```{R}
-ggplot(data, aes(y = duration_ms)) +
-    geom_boxplot() +
-    labs(y = "Тривалість треків") +
-     theme(axis.title = element_text(size = 40),
-        axis.text = element_text(size = 40))
+box_plot(data, aes(y = duration_ms), "Duration of tracks", 40,40)
+
 ```
 energy:
 ```{R}
-ggplot(data, aes(y = energy)) +
-    geom_boxplot() +
-    labs(y = "Енергійність треків") +
-     theme(axis.title = element_text(size = 40),
-        axis.text = element_text(size = 40))
+box_plot(data, aes(y = energy), "The energy of the tracks", 40,40)
+
 ```
 tempo:
 ```{r}
-ggplot(data, aes(y = tempo)) +
-    geom_boxplot() +
-    labs(y = "Темп треків") +
-     theme(axis.title = element_text(size = 40),
-        axis.text = element_text(size = 40))
+box_plot(data, aes(y = tempo), "Tempo tracks", 40,40)
+
 ```
 speechiness:
 ```{r}
-ggplot(data, aes(y = speechiness)) +
-    geom_boxplot() +
-    labs(y = "Мовність треку (speechiness)") +
-     theme(axis.title = element_text(size = 40),
-        axis.text = element_text(size = 40))
+box_plot(data, aes(y = speechiness), "The speechiness of the tracks", 40,40)
 ```
 # Виявлення викидів в числових змінних
 Застосуємо фільтр Гампеля для числових змінних
