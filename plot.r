@@ -2,11 +2,19 @@ source("cleaning.R")
 library(qqplotr)
 library(GGally)
 
+# Завантаження попередньо очищених даних 
+
 data <- clean_date()
+
+# Перегляд основної інформації про датасет
 
 str(data)
 
+# Перегляд основних статистик для кожної змінної датасету
+
 summary(data)
+
+# Побудова boxplots для змінних, що нас цікавлять
 
 box_plot <- function(aes_y, title_y, title_size, text_size) {
   ggplot(data, aes(y = aes_y)) +
@@ -16,13 +24,20 @@ box_plot <- function(aes_y, title_y, title_size, text_size) {
         axis.text = element_text(size = text_size))
 }
 
-box_plot(data$popularity, "Popularity of tracks", 25,20)
-box_plot(data$valence, "Valence of tracks", 40,40)
-box_plot(data$duration_ms, "Duration of tracks", 40,40)
-box_plot(data$energy, "The energy of the tracks", 40,40)
-box_plot(data$tempo, "Tempo tracks", 40,40)
-box_plot(data$speechiness, "The speechiness of the tracks", 40,40)
+box_plot(data$popularity, "Popularity of tracks", 15, 15)
+box_plot(data$valence, "Valence of tracks", 15,15)
 
+data %>%
+  mutate(duration_m = duration_ms / 60000) %>%
+  select(duration_m) -> duration_m
+
+box_plot(duration_m$duration_m, "Duration of tracks", 15,15)
+
+box_plot(data$energy, "The energy of the tracks", 15,15)
+box_plot(data$tempo, "Tempo tracks", 15,15)
+box_plot(data$speechiness, "The speechiness of the tracks", 15,15)
+
+# Перевірка викидів за допомогою функції Гампеля
 
 Hampel_filter <- function (arg){
     data %>% filter(arg < median(arg) - 3 * mad(arg) |
@@ -65,12 +80,14 @@ print(Hampel_filter(data$tempo) %>%
 print(Hampel_filter(data$time_signature) %>%
     arrange(desc(time_signature)))
 
+# Виведення QQ plots для змінних, що нас цікавлять
+
 qq_plot_builder <- function (aes,  y_label){
   ggplot(data, aes) +
     stat_qq_point() + stat_qq_line() + stat_qq_band() +
     labs(x = "Quantiles of the normal distribution", y = y_label) +
-    theme(axis.title = element_text(size = 25),
-    axis.text = element_text(size = 20))
+    theme(axis.title = element_text(size = 15),
+    axis.text = element_text(size = 15))
 }
 
 qq_plot_builder(aes(sample = popularity),"Popularity")
@@ -82,41 +99,42 @@ qq_plot_builder(aes(sample = speechiness),"Speechiness")
 
 # Побудова гістограм для деяких неперервних змінних
 
-diagram_plot_builder <- function (aes){
+histogram_plot_builder <- function (aes){
   data %>%
     ggplot(aes) +
     geom_histogram(color = "#e9ecef", alpha = 0.6, position = 'identity') +
     labs(fill = "")
 }
 
-diagram_plot_builder(aes(x = popularity))
-diagram_plot_builder(aes(x = valence))
-diagram_plot_builder(aes(x = duration_ms))
-diagram_plot_builder(aes(x = energy))
-diagram_plot_builder(aes(x = tempo))
-diagram_plot_builder(aes(x = speechiness))
+histogram_plot_builder(aes(x = popularity))
+histogram_plot_builder(aes(x = valence))
+histogram_plot_builder(aes(x = duration_ms))
+histogram_plot_builder(aes(x = energy))
+histogram_plot_builder(aes(x = tempo))
+histogram_plot_builder(aes(x = speechiness))
 
 
 # Побудова гістограм та QQ-графіків прологаритмованих змінних
 
-diagram_plot_builder(aes(x = log(popularity)))
+histogram_plot_builder(aes(x = log(popularity)))
 qq_plot_builder(aes(sample = log(popularity)),"Popularity")
 
-diagram_plot_builder(aes(x = log(valence)))
+histogram_plot_builder(aes(x = log(valence)))
 qq_plot_builder(aes(sample = log(valence)),"Valence")
 
-diagram_plot_builder(aes(x = log(duration_ms)))
+histogram_plot_builder(aes(x = log(duration_ms)))
 qq_plot_builder(aes(sample = log(duration_ms)),"Duration, ms")
 
-diagram_plot_builder(aes(x = log(energy)))
+histogram_plot_builder(aes(x = log(energy)))
 qq_plot_builder(aes(sample = log(energy)),"Energy")
 
-diagram_plot_builder(aes(x = log(tempo)))
+histogram_plot_builder(aes(x = log(tempo)))
 qq_plot_builder(aes(sample = log(tempo)),"Tempo")
 
-diagram_plot_builder(aes(x = log(speechiness)))
+histogram_plot_builder(aes(x = log(speechiness)))
 qq_plot_builder(aes(sample = log(speechiness)),"Speechiness")
 
+# Виведення найбільш популярних об'єктів в залежності від певних харакеристик
 
 most_popular_artists <-
     data %>%
@@ -127,14 +145,32 @@ most_popular_artists <-
 
 print(most_popular_artists)
 
+ggplot(most_popular_artists, aes(x=artists, y=popularity, fill = artists)) + 
+  geom_bar(stat = 'identity' ) + coord_flip()
+
 most_popular_albums <-
     data %>%
     group_by(album_name) %>%
     summarise(popularity = sum(popularity)) %>%
     arrange(desc(popularity)) %>%
-    head(5)
+    head(20)
 
 print(most_popular_albums)
+
+# Перегляд most_popular_albums за допомгою lollipop графіка 
+
+ggplot(most_popular_albums, aes(x=album_name, y=popularity)) +
+  geom_segment( aes(x=album_name, xend=album_name, y=0, yend=popularity), color="skyblue") +
+  geom_point( color="blue", size=4, alpha=0.6) +
+  theme_light() +
+  coord_flip() +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+data %>% filter(album_name == 'Un Verano Sin Ti') %>% print(n=56)
 
 most_popular_genres <-
     data %>%
@@ -145,15 +181,51 @@ most_popular_genres <-
 
 print(most_popular_genres)
 
+ggplot(most_popular_genres, aes(x=track_genre, y=popularity, fill = track_genre)) + 
+  geom_bar(stat = 'identity' ) + coord_flip()
+
+# Підготовка даних для відображення violin plot
+
+five_genres = data$track_genre[data$track_genre %in% c('pop-film', 'k-pop', 'chill', 'sad', 'grunge')]
+data_filtered_by_genre = data[data$track_genre %in% c('pop-film', 'k-pop', 'chill', 'sad', 'grunge'),]
+
+ggplot(data_filtered_by_genre, aes(x=five_genres, y=popularity, fill=five_genres)) +
+  geom_violin()
+
+# Графік кореляціїї числових неперервних змінних
+
 ggcorr(data %>% select(where(is.numeric)), label = TRUE)
 
-ggcorr(data %>% select(popularity, valence), label = TRUE)
+histogram_plot_builder(aes(x = loudness))
+qq_plot_builder(aes(sample=loudness), "Loudness")
+box_plot(data$loudness, "The loudness of the tracks", 15,15)
 
-ggcorr(data %>% select(duration_ms, energy), label = TRUE)
-
-ggcorr(data %>% select(tempo, speechiness), label = TRUE)
+# Перегляд залежності змінної energy та loudness на точковому графіку
 
 data %>%
-    ggplot(aes(x = explicit, y = speechiness)) +
-    geom_bar(stat = "identity")
+  ggplot(aes(x=energy, y=loudness)) +
+  geom_point(alpha=0.5)
 
+ggplot(data=data, aes(x=energy)) +
+  geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8)
+
+ggplot(data=data, aes(x=loudness)) +
+  geom_density(fill="#43c4d9", color="#e9ecef", alpha=0.8)
+
+# Об'єднання двох стовпців в один датасет для візуалізації їх гістограм розподілу (loudness, energy)
+
+energy <-  data.frame(length=data$energy)
+energy$type <- 'energy'
+loudness <- data.frame(length=data$loudness)
+loudness$type <- 'loudness'
+energy_and_loudness <- rbind(energy, loudness)
+
+ggplot(data=energy_and_loudness, aes(x=length, group=type, fill=type)) +
+  geom_density(alpha=.4)
+
+# Стовпчаста діаграма speechiness для кожної групи explicit
+
+data %>%
+    ggplot(aes(x = explicit, y = speechiness, fill = explicit)) +
+    geom_bar(stat = "identity")
+    
