@@ -170,7 +170,7 @@ ggplot(most_popular_albums, aes(x=album_name, y=popularity)) +
     axis.ticks.y = element_blank()
   )
 
-data %>% filter(album_name == 'Un Verano Sin Ti') %>% print(n=56)
+# data %>% filter(album_name == 'Un Verano Sin Ti') %>% print(n=56)
 
 most_popular_genres <-
     data %>%

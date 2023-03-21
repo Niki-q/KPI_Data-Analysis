@@ -7,7 +7,7 @@ clean_date <- function() {
     # Завантаження файлу
 
     print("Завантаження файлу з датасетом...")
-    data <- read_csv('data/dataset.csv')
+    data <- read_csv('\\data\\dataset.csv')
 
     # Виведення основної інформації про датасет
     
@@ -37,4 +37,5 @@ clean_date <- function() {
 
     data <- data[rowSums(is.na(data)) == 0, ]
     print("Видалено рядки з NA значеннями.")
+    return(data)
 }
