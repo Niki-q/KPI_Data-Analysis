@@ -37,8 +37,3 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
-
-/lecture
-/data
-/example
-/.idea
