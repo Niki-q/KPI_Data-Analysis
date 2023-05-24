@@ -1,0 +1,539 @@
+# Завантаження датасету та його очищення
+```{r}
+source("cleaning.R")
+library(qqplotr)
+library(GGally)
+library(BSDA)
+library(boot)
+
+# Завантаження попередньо очищених даних 
+data <- clean_date()
+
+# Перегляд основної інформації про датасет
+str(data)
+
+# Перегляд основних статистик для кожної змінної датасету
+summary(data)
+```
+
+# Аналіз вибірками, що мають нульову та більшу за нуль популярність
+```{r}
+# Вибірка даних, де популярність більша за 0
+data_filtered_by_popularity = data %>% filter(popularity > 0)
+
+str(data_filtered_by_popularity)
+summary(data_filtered_by_popularity)
+
+# Вибірка даних, де популярність дорівнює 0
+data_popularity_null = data %>% filter(popularity == 0)
+
+str(data_popularity_null)
+summary(data_popularity_null)
+
+# Побудова гістограм розподілу популярності треків з популярностю більшою за 0
+ggplot(data_filtered_by_popularity, aes(x=popularity)) +
+  geom_histogram(color = "#e9ecef", alpha = 0.6, position = 'identity') +
+  labs(fill = "")
+
+# Перевірка кореляції даних з усієї вибірки
+ggcorr(data %>% select(where(is.numeric)), label = TRUE)
+
+# Перевірка кореляції даних з вибірки, де популярність більша за 0
+ggcorr(data_filtered_by_popularity %>% select(where(is.numeric)), label = TRUE)
+```
+
+Можемо побачити вище, що вибірка, яка має нульову популярність треків, не є випадковістю. Треки просто не є популярними.
+
+# Гістограми розподілів змінних, що становлять інтерес та кореляція між змінними
+```{r}
+# Побудова гістограм для деяких неперервних змінних
+histogram_plot_builder <- function (data, aes){
+  data %>%
+    ggplot(aes) +
+    geom_histogram(color = "#e9ecef", alpha = 0.6, position = 'identity') +
+    labs(fill = "")
+}
+```
+
+```{r}
+histogram_plot_builder(data, aes(x = popularity))
+histogram_plot_builder(data, aes(x = valence))
+
+data %>%
+  mutate(duration_m = duration_ms / 60000) %>%
+  select(duration_m) -> duration_m
+
+histogram_plot_builder(duration_m, aes(x = duration_m))
+summary(duration_m)
+
+histogram_plot_builder(data, aes(x = energy))
+histogram_plot_builder(data, aes(x = tempo))
+histogram_plot_builder(data, aes(x = speechiness))
+
+histogram_plot_builder(data, aes(x = loudness))
+histogram_plot_builder(data, aes(x = acousticness))
+```
+
+```{r}
+# Стовпчаста діаграма speechiness для кожної групи explicit
+data %>%
+    ggplot(aes(x = explicit, y = speechiness, fill = explicit)) +
+    geom_bar(stat = "identity")
+```
+
+Асимптотично нормальний розподіл мають наступні характеристики:
+- popularity
+- valence
+- duration_m
+- tempo
+
+Змінні, ще не мають асимптотично нормального розподілу:
+- energy
+- speechiness
+- loudness
+- acousticness
+
+
+
+- БУТСТРЕП ДОВІРЧІ ІНТЕРВАЛИ МЕТОДАМИ NORMAL, BASIC, PERCENTILE
+- Взяти 5 найпопулярніших жанрів в середньому та медіанному значенні
+  - Зробити довірчі інтервали для середніх та медіанних значень статистик
+- Взяти 5 найпопулярніших артистів в середньому та медіанному значенні
+  - Зробити довірчі інтервали для середніх та медіанних значень статистик
+- Порівняти середнє та медіанне значення мовності та популярності в треках, що містять та не містять ненормативну лексику
+  - Побудувати відповідні довірчі інтервали
+  - Провести тест Волда на рівність середніх та медіанних значень популярності та мовності треків
+- Дослідити кореляцію між числовими змінними, обрати ті, де кореляція найвища
+  - Побудувати довірчі інтервали для кореляції (бустреп)
+
+# Порівняння 5 жанрів за середньою та медіанною популярністю
+```{r}
+most_popular_genres <-
+    data %>%
+    group_by(track_genre) %>%
+    summarise(popularity = sum(popularity)) %>%
+    arrange(desc(popularity)) %>%
+    head(5)
+
+most_popular_genres
+```
+
+```{r}
+pop_film_genre <- filter(data, track_genre == 'pop-film')
+k_pop_genre <- filter(data, track_genre == 'k-pop')
+chill_genre <- filter(data, track_genre == 'chill')
+sad_genre <- filter(data, track_genre == 'sad')
+grunge_genre <- filter(data, track_genre == 'grunge')
+```
+
+```{r}
+histogram_plot_builder(pop_film_genre, aes(x=popularity))
+histogram_plot_builder(k_pop_genre, aes(x=popularity))
+histogram_plot_builder(chill_genre, aes(x=popularity))
+histogram_plot_builder(sad_genre, aes(x=popularity))
+histogram_plot_builder(grunge_genre, aes(x=popularity))
+```
+
+## Обчислення довірчих інтервалів для середнього значення популярності кожного жанру
+```{r}
+z_t_ci_mean <- function(value){
+  z_ci_mean <- z.test(value, sigma.x = sd(value), conf.level=0.95)$conf.int
+  t_ci_mean <- t.test(value, conf.level=0.95)$conf.int
+  data %>% 
+  summarise(mean = mean(value),
+            sd = sd(value),
+            z_a = z_ci_mean[1],
+            z_b = z_ci_mean[2],
+            t_a = t_ci_mean[1], 
+            t_b = t_ci_mean[2]) -> ci
+  ci
+}
+```
+
+```{r}
+z_t_ci_mean(pop_film_genre$popularity)
+z_t_ci_mean(k_pop_genre$popularity)
+z_t_ci_mean(chill_genre$popularity)
+z_t_ci_mean(sad_genre$popularity)
+z_t_ci_mean(grunge_genre$popularity)
+```
+
+```{r}
+ci = rbind(z_t_ci_mean(pop_film_genre$popularity),
+  z_t_ci_mean(k_pop_genre$popularity),
+  z_t_ci_mean(chill_genre$popularity),
+  z_t_ci_mean(sad_genre$popularity),
+  z_t_ci_mean(grunge_genre$popularity)
+)
+
+ci$group <- rep(c("pop_film_genre", "k_pop_genre", "chill_genre", "sad_genre", "grunge_genre"), each = 1)
+
+ggplot(ci, aes(x = group, y = mean, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(data = ci, aes(x = group, ymin = t_a, ymax = t_b), 
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+## Обчислення бутстреп довірчих інтервалів для медіанного значення кожного жанру
+```{r}
+boot_median <- function(data, i){
+  median(data[i])
+}
+
+boot_ci_median <- function(data, type){
+  boot_data <- boot(data, boot_median, R = 1000)
+  boot_ci <- boot.ci(boot_data, type = type, conf = 0.95)
+  boot_ci
+}
+```
+
+```{r}
+boot_ci_pop_film <- boot_ci_median(pop_film_genre$popularity, type=c("norm", "basic", "perc"))
+boot_ci_k_pop <- boot_ci_median(k_pop_genre$popularity, type=c("norm", "basic", "perc"))
+boot_ci_chill <- boot_ci_median(chill_genre$popularity, type=c("norm", "basic", "perc"))
+boot_ci_sad <- boot_ci_median(sad_genre$popularity, type=c("norm", "basic", "perc"))
+boot_ci_grunge <- boot_ci_median(grunge_genre$popularity, type=c("norm", "basic", "perc"))
+```
+
+```{r}
+boot_ci_pop_film
+boot_ci_k_pop
+boot_ci_chill
+boot_ci_sad
+boot_ci_grunge
+
+median(k_pop_genre$popularity) 
+median(chill_genre$popularity) 
+median(sad_genre$popularity)
+median(grunge_genre$popularity)
+```
+
+```{r}
+boot_ci <- data.frame(
+    group = c("pop_film_genre", 
+      "k_pop_genre", 
+      "chill_genre", 
+      "sad_genre", 
+      "grunge_genre"),
+    median = c(median(pop_film_genre$popularity), 
+      median(k_pop_genre$popularity), 
+      median(chill_genre$popularity), 
+      median(sad_genre$popularity), 
+      median(grunge_genre$popularity)),
+    lower = c(boot_ci_pop_film$normal[2], 
+      boot_ci_k_pop$normal[2],
+      boot_ci_chill$normal[2],
+      boot_ci_sad$normal[2],
+      boot_ci_grunge$normal[2]),
+    upper = c(boot_ci_pop_film$normal[3], 
+      boot_ci_k_pop$normal[3],
+      boot_ci_chill$normal[3],
+      boot_ci_sad$normal[3],
+      boot_ci_grunge$normal[3])
+      )
+
+ggplot(boot_ci, aes(x = group, y = median, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(x = group, ymin = lower, ymax = upper),
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+# Порівняння 5 артистів за середньою та медіанною популярністю
+```{r}
+most_popular_artists <-
+    data %>%
+    group_by(artists) %>%
+    summarise(popularity = sum(popularity)) %>%
+    arrange(desc(popularity)) %>%
+    head(5)
+
+most_popular_artists
+```
+
+## Створення окремів датафреймів для кожного артиста:
+```{r}
+beatles <- filter(data, artists == 'The Beatles')
+linkin_park <- filter(data, artists == 'Linkin Park')
+bts <- filter(data, artists == 'BTS')
+prateek_kuhad <- filter(data, artists == 'Prateek Kuhad')
+elvis_presley <- filter(data, artists == 'Elvis Presley')
+```
+
+```{r}
+histogram_plot_builder(beatles, aes(x=popularity))
+histogram_plot_builder(linkin_park, aes(x=popularity))
+histogram_plot_builder(bts, aes(x=popularity))
+histogram_plot_builder(prateek_kuhad, aes(x=popularity))
+histogram_plot_builder(elvis_presley, aes(x=popularity))
+```
+
+## 
+```{r}
+z_t_ci_mean(beatles$popularity)
+z_t_ci_mean(linkin_park$popularity)
+z_t_ci_mean(bts$popularity)
+z_t_ci_mean(prateek_kuhad$popularity)
+z_t_ci_mean(elvis_presley$popularity)
+
+ci = rbind(z_t_ci_mean(beatles$popularity),
+  z_t_ci_mean(linkin_park$popularity),
+  z_t_ci_mean(bts$popularity),
+  z_t_ci_mean(prateek_kuhad$popularity),
+  z_t_ci_mean(elvis_presley$popularity),
+)
+
+ci$group <- rep(c("beatles", "linkin_park", "bts", "prateek_kuhad", "elvis_presley"), each = 1)
+
+ggplot(ci, aes(x = group, y = mean, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(data = ci, aes(x = group, ymin = t_a, ymax = t_b), 
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+```{r}
+boot_ci_beatles <- boot_ci_median(beatles$popularity, type=c("norm", "basic", "perc"))
+boot_ci_linkin_park <- boot_ci_median(linkin_park$popularity, type=c("norm", "basic", "perc"))
+boot_ci_bts <- boot_ci_median(bts$popularity, type=c("norm", "basic", "perc"))
+boot_ci_prateek_kuhad <- boot_ci_median(prateek_kuhad$popularity, type=c("norm", "basic", "perc"))
+boot_ci_elvis_presley <- boot_ci_median(elvis_presley$popularity, type=c("norm", "basic", "perc"))
+
+boot_ci_beatles
+boot_ci_linkin_park
+boot_ci_bts
+boot_ci_prateek_kuhad
+boot_ci_elvis_presley
+
+median(beatles$popularity)
+median(linkin_park$popularity) 
+median(bts$popularity) 
+median(prateek_kuhad$popularity) 
+median(elvis_presley$popularity)
+
+boot_ci <- data.frame(
+    group = c("beatles", "linkin_park", "bts", "prateek_kuhad", "elvis_presley"),
+    median = c(median(beatles$popularity), 
+      median(linkin_park$popularity), 
+      median(bts$popularity), 
+      median(prateek_kuhad$popularity), 
+      median(elvis_presley$popularity)),
+    lower = c(boot_ci_beatles$normal[2], 
+      boot_ci_linkin_park$normal[2],
+      boot_ci_bts$normal[2],
+      boot_ci_prateek_kuhad$normal[2],
+      boot_ci_elvis_presley$normal[2]),
+    upper = c(boot_ci_beatles$normal[3], 
+      boot_ci_linkin_park$normal[3],
+      boot_ci_bts$normal[3],
+      boot_ci_prateek_kuhad$normal[3],
+      boot_ci_elvis_presley$normal[3])
+      )
+
+ggplot(boot_ci, aes(x = group, y = median, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(x = group, ymin = lower, ymax = upper),
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+# Порівняння середньої та медіанної популярності та мовності треків, які містять та не містять нормативну лексику
+```{r}
+true_explicit <- filter(data, explicit == TRUE)
+false_explicit <- filter(data, explicit == FALSE)
+```
+
+```{r}
+histogram_plot_builder(true_explicit, aes(x=popularity))
+histogram_plot_builder(false_explicit, aes(x=popularity))
+
+histogram_plot_builder(true_explicit, aes(x=speechiness))
+histogram_plot_builder(false_explicit, aes(x=speechiness))
+```
+
+```{r}
+z_t_ci_mean(true_explicit$popularity)
+z_t_ci_mean(false_explicit$popularity)
+```
+
+```{r}
+ci = rbind(z_t_ci_mean(true_explicit$popularity),
+  z_t_ci_mean(false_explicit$popularity)
+)
+
+ci$group <- rep(c("true_explicit", "false_explicit"), each = 1)
+
+ggplot(ci, aes(x = group, y = mean, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(data = ci, aes(x = group, ymin = t_a, ymax = t_b), 
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+```{r}
+z_t_ci_mean(true_explicit$speechiness)
+z_t_ci_mean(false_explicit$speechiness)
+```
+
+```{r}
+ci = rbind(z_t_ci_mean(true_explicit$speechiness),
+  z_t_ci_mean(false_explicit$speechiness)
+)
+
+ci$group <- rep(c("true_explicit", "false_explicit"), each = 1)
+
+ggplot(ci, aes(x = group, y = mean, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(data = ci, aes(x = group, ymin = t_a, ymax = t_b), 
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+```{r}
+boot_ci_true_explicit <- boot_ci_median(true_explicit$popularity, type=c("norm", "basic", "perc"))
+boot_ci_false_explicit <- boot_ci_median(false_explicit$popularity, type=c("norm", "basic", "perc"))
+```
+
+```{r}
+boot_ci_true_explicit
+boot_ci_false_explicit
+```
+
+```{r}
+boot_ci <- data.frame(
+    group = c("true_explicit", "false_explicit"),
+    median = c(median(true_explicit$popularity), 
+      median(false_explicit$popularity)), 
+    lower = c(boot_ci_true_explicit$normal[2], 
+      boot_ci_false_explicit$normal[2]),
+    upper = c(boot_ci_true_explicit$normal[3], 
+      boot_ci_false_explicit$normal[3])
+      )
+
+boot_ci
+
+ggplot(boot_ci, aes(x = group, y = median, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(x = group, ymin = lower, ymax = upper),
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+```{r}
+boot_ci_true_explicit <- boot_ci_median(true_explicit$speechiness, type=c("norm", "basic", "perc"))
+boot_ci_false_explicit <- boot_ci_median(false_explicit$speechiness, type=c("norm", "basic", "perc"))
+```
+
+```{r}
+boot_ci_true_explicit
+boot_ci_false_explicit
+```
+
+````{r}
+boot_ci <- data.frame(
+    group = c("true_explicit", "false_explicit"),
+    median = c(median(true_explicit$speechiness), 
+      median(false_explicit$speechiness)), 
+    lower = c(boot_ci_true_explicit$normal[2], 
+      boot_ci_false_explicit$normal[2]),
+    upper = c(boot_ci_true_explicit$normal[3], 
+      boot_ci_false_explicit$normal[3])
+      )
+
+boot_ci
+
+ggplot(boot_ci, aes(x = group, y = median, color = group)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(x = group, ymin = lower, ymax = upper),
+  width = 0.5, position = position_dodge(width = 0.5))
+```
+
+# Тестування гіпотези про рівність середньої популярності та мовності
+```{r}
+t.test(true_explicit$popularity, false_explicit$popularity, alternative = "greater")
+t.test(true_explicit$speechiness, false_explicit$speechiness, alternative = "greater")
+```
+У результаті проведення тесту середніх популярностей видно, що треки, які мають в собі ненормативну лексику є більш популярними.
+
+# Тест Волда на рівність медіанної популярності треків, що мають та не мають ненормативну лексику
+```{r}
+boot_data_true_explicit <- boot(true_explicit$popularity, boot_median, R = 1000)
+boot_data_false_explicit <- boot(false_explicit$popularity, boot_median, R = 1000)
+
+var_median_te <- var(boot_data_true_explicit$t)
+var_median_fe <- var(boot_data_false_explicit$t)
+
+median_te <- median(true_explicit$popularity)
+median_fe <- median(false_explicit$popularity)
+
+se_median <- sqrt(var_median_te + var_median_fe)
+
+T <- (median_te - median_fe)/se_median
+
+p_value <- pnorm(T, lower.tail = FALSE)
+
+conf.int <- c(median_te-median_fe-qnorm(0.95)*se_median,Inf)
+
+median_te
+median_fe
+p_value
+conf.int
+```
+
+# Тест Волда на рівність медіанної мовності треків, що мають та не мають ненормативну лексику
+```{r}
+boot_data_true_explicit <- boot(true_explicit$speechiness, boot_median, R = 1000)
+boot_data_false_explicit <- boot(false_explicit$speechiness, boot_median, R = 1000)
+
+var_median_te <- var(boot_data_true_explicit$t)
+var_median_fe <- var(boot_data_false_explicit$t)
+
+median_te <- median(true_explicit$speechiness)
+median_fe <- median(false_explicit$speechiness)
+
+se_median <- sqrt(var_median_te + var_median_fe)
+
+T <- (median_te - median_fe)/se_median
+
+p_value <- pnorm(T, lower.tail = FALSE)
+
+conf.int <- c(median_te-median_fe-qnorm(0.95)*se_median,Inf)
+
+median_te
+median_fe
+p_value
+conf.int
+```
+
+# Аналіз кореляції між змінними
+```{r}
+# Графік кореляціїї числових неперервних змінних
+ggcorr(data %>% select(where(is.numeric)), label = TRUE)
+
+boot_cor <- function(data, index) {
+  d <- data[index,]
+  return(cor(d$energy, d$loudness, method = "pearson"))
+}
+
+boot_ci_cor <- function(data, type){
+  boot_data <- boot(data, boot_cor, R = 1000)
+  boot_ci <- boot.ci(boot_data, type = type, conf = 0.95)
+  boot_ci
+}
+
+boot_ci_cor(data, type=c("norm", "basic", "perc"))
+cor(data$energy, data$loudness)
+```
+
+```{r}
+boot_cor <- function(data, index) {
+  d <- data[index,]
+  return(cor(d$energy, d$acousticness, method = "pearson"))
+}
+
+boot_ci_cor <- function(data, type){
+  boot_data <- boot(data, boot_cor, R = 1000)
+  boot_ci <- boot.ci(boot_data, type = type, conf = 0.95)
+  boot_ci
+}
+
+boot_ci_cor(data, type=c("norm", "basic", "perc"))
+cor(data$energy, data$acousticness)
+```
+
+Від'ємна кореляція (довірчі інтервали)
+Жанри (тести, медіана, там де перетинається)
