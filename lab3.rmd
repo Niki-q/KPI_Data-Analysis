@@ -1,0 +1,282 @@
+```{r}
+source("cleaning.R")
+library(qqplotr)
+library(GGally)
+library(stargazer)
+library(lmtest)
+library(car)
+
+
+# Завантаження попередньо очищених даних 
+data <- clean_date()
+data <- data %>% mutate(false_explicit = ifelse(explicit == FALSE, 0, 1))
+# str(data)
+# summary(data)
+```
+
+```{r}
+# Побудова гістограм для неперервних змінних
+histogram_plot_builder <- function (data, aes){
+  data %>%
+    ggplot(aes) +
+    geom_histogram(color = "#e9ecef", alpha = 0.6, position = 'identity') +
+    labs(fill = "")
+}
+```
+
+# Регресійна модель для дослідження впливу на популярність з нульвими значеннями
+```{r}
+ggcorr(data %>% select(where(is.numeric)), method = c("pairwise", "spearman"), label = TRUE)
+```
+
+```{r}
+histogram_plot_builder(data, aes(x=popularity))
+histogram_plot_builder(data, aes(x=energy))
+histogram_plot_builder(data, aes(x=loudness))
+histogram_plot_builder(data, aes(x=danceability))
+```
+
+Побудуємо модель для дослідження залежності популярності від energy, danceability та explicit.
+
+```{r}
+ggplot(data, aes(x = energy, y = popularity)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2), se = FALSE) +
+  # labs(x = "Середній дохід", y = "Середній бал за тест") +
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 20))
+```
+
+```{r}
+ggplot(data, aes(x = danceability, y = popularity)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  # labs(x = "Середній дохід", y = "Середній бал за тест") +
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 20))
+```
+
+```{r}
+model_1 <- lm(formula=popularity ~ energy + danceability + false_explicit, data=data)
+model_1_hc1 <- coeftest(model_1, vcov. = hccm(model_1, type = "hc1"))
+```
+
+Існує сильна кореляція між змінними energy та loudness. Включимо loudness до модели як контрольну змінну для зменшення OVB.
+```{r}
+model_2 <- lm(formula=popularity ~ energy + danceability + false_explicit + loudness, data=data)
+model_2_hc1 <- coeftest(model_2, vcov. = hccm(model_2, type = "hc1"))
+```
+
+Існує сильна кореляція між змінними energy та acousticness. Включимо acousticness до модели як контрольну змінну для зменшення OVB.
+```{r}
+model_3 <- lm(formula=popularity ~ energy + danceability + false_explicit + loudness + acousticness, data=data)
+model_3_hc1 <- coeftest(model_3, vcov. = hccm(model_3, type = "hc1"))
+```
+
+```{r}
+stargazer(model_1, model_1_hc1, model_2, model_2_hc1, model_3, model_3_hc1, type = "html", digits = 3)
+```
+
+Існує доволі сильна кореляція між змінними danceability та valence. Включимо valence до модели як контрольну змінну для зменшення OVB.
+```{r}
+model_4 <- lm(formula=popularity ~ energy + danceability + false_explicit + loudness + acousticness + valence, data=data)
+model_4_hc1 <- coeftest(model_4, vcov. = hccm(model_4, type = "hc1"))
+```
+
+```{r}
+stargazer(model_4, model_4_hc1, type = "html", digits = 3)
+```
+
+```{r}
+model_5 <- lm(formula=popularity ~ energy + I(energy^2) + danceability + false_explicit + loudness + acousticness + valence, data=data)
+model_5_hc1 <- coeftest(model_5, vcov. = hccm(model_5, type = "hc1"))
+```
+
+```{r}
+model_6 <- lm(formula=popularity ~ energy + I(energy^2) + danceability + I(danceability^2) + false_explicit + loudness + acousticness + valence, data=data)
+model_6_hc1 <- coeftest(model_6, vcov. = hccm(model_6, type = "hc1"))
+```
+
+```{r}
+model_6 <- lm(formula=popularity ~ energy + I(energy^2) + danceability + I(danceability^2) + false_explicit + loudness + acousticness + valence, data=data)
+model_6_hc1 <- coeftest(model_6, vcov. = hccm(model_6, type = "hc1"))
+```
+
+```{r}
+model_7 <- lm(formula=popularity ~ energy*false_explicit + I(energy^2) + danceability + I(danceability^2) + loudness + acousticness + valence, data=data)
+model_7_hc1 <- coeftest(model_7, vcov. = hccm(model_7, type = "hc1"))
+```
+
+```{r}
+model_8 <- lm(formula=popularity ~ energy*false_explicit + I(energy^2) + danceability*false_explicit + I(danceability^2) + loudness + acousticness + valence, data=data)
+model_8_hc1 <- coeftest(model_8, vcov. = hccm(model_8, type = "hc1"))
+```
+
+```{r}
+stargazer(model_4, model_4_hc1, model_5, model_5_hc1, model_6, model_6_hc1, type = "html", digits = 3)
+```
+
+```{r}
+stargazer(model_7, model_7_hc1, model_8, model_8_hc1, type = "html", digits = 3)
+```
+
+```{r}
+linearHypothesis(model_7, c("energy = 0", "I(energy^2) = 0"), vcov. = hccm(model_7, type = "hc1"))
+```
+Даний результат представляє результати тесту лінійних гіпотез для моделі. Тест виконує порівняння двох моделей: обмеженої моделі (Model 1) і альтернативної моделі (Model 2).
+
+Гіпотези, що перевіряються, виглядають наступним чином:
+
+H0: energy = 0
+H0: I(energy^2) = 0
+
+Тобто перша гіпотеза стверджує, що коефіцієнт при змінній "energy" дорівнює нулю, а друга гіпотеза стверджує, що коефіцієнт при квадраті змінної "energy" також дорівнює нулю.
+
+Результати тесту показують, що для обох гіпотез було обрано альтернативну модель (Model 2). Це означає, що є статистично значущі докази проти нульових гіпотез. Значення F-статистики дорівнює 283.69, а p-значення менше за 2.2e-16, що є дуже малим.
+
+Отже, можна вважати, що є статистично значущий вплив змінних "energy" і "I(energy^2)" на модель, яка включає також інші регресори, такі як "false_explicit", "danceability", "I(danceability^2)", "loudness", "acousticness" і "valence".
+
+```{r}
+linearHypothesis(model_7, c("danceability = 0", "I(danceability^2) = 0"), vcov. = hccm(model_7, type = "hc1"))
+```
+Даний результат представляє результати тесту лінійних гіпотез для моделі. Тест виконує порівняння двох моделей: обмеженої моделі (Model 1) і альтернативної моделі (Model 2).
+
+Гіпотези, що перевіряються, виглядають наступним чином:
+
+H0: danceability = 0
+H0: I(danceability^2) = 0
+
+Тобто перша гіпотеза стверджує, що коефіцієнт при змінній "danceability" дорівнює нулю, а друга гіпотеза стверджує, що коефіцієнт при квадраті змінної "danceability" також дорівнює нулю.
+
+Результати тесту показують, що для обох гіпотез було обрано альтернативну модель (Model 2). Це означає, що є статистично значущі докази проти нульових гіпотез. Значення F-статистики дорівнює 391.46, а p-значення менше за 2.2e-16, що є дуже малим.
+
+Отже, можна вважати, що є статистично значущий вплив змінних "danceability" і "I(danceability^2)" на модель, яка включає також інші регресори, такі як "energy", "false_explicit", "I(energy^2)", "loudness", "acousticness" і "valence".
+
+```{r}
+linearHypothesis(model_7, c("energy = 0", "energy:false_explicit = 0"), vcov. = hccm(model_7, type = "hc1"))
+```
+Даний результат представляє результати тесту лінійних гіпотез для моделі. Тест виконує порівняння двох моделей: обмеженої моделі (Model 1) і альтернативної моделі (Model 2).
+
+Гіпотези, що перевіряються, виглядають наступним чином:
+
+H0: energy = 0
+H0: energy:false_explicit = 0
+
+Тобто перша гіпотеза стверджує, що коефіцієнт при змінній "energy" дорівнює нулю, а друга гіпотеза стверджує, що коефіцієнт при взаємодії між "energy" і "false_explicit" дорівнює нулю.
+
+Результати тесту показують, що для обох гіпотез було обрано альтернативну модель (Model 2). Це означає, що є статистично значущі докази проти нульових гіпотез. Значення F-статистики дорівнює 144.68, а p-значення менше за 2.2e-16, що є дуже малим.
+
+Отже, можна вважати, що є статистично значущий вплив змінних "energy" і "energy:false_explicit" на модель, яка включає також інші регресори, такі як "false_explicit", "danceability", "I(danceability^2)", "loudness", "acousticness" і "valence".
+
+```{r}
+linearHypothesis(model_8, c("danceability = 0", "false_explicit:danceability = 0"), vcov. = hccm(model_8, type = "hc1"))
+```
+
+# Регресійна модель для дослідження впливу на популярність без нульових значень
+```{r}
+data_pop_not_null <- data %>% filter(popularity > 0)
+```
+
+```{r}
+ggcorr(data_pop_not_null %>% select(where(is.numeric)), label = TRUE)
+```
+
+```{r}
+histogram_plot_builder(data_pop_not_null, aes(x=popularity))
+histogram_plot_builder(data_pop_not_null, aes(x=energy))
+histogram_plot_builder(data_pop_not_null, aes(x=danceability))
+# summary(data_pop_not_null)
+```
+
+```{r}
+ggplot(data_pop_not_null, aes(x = energy, y = popularity)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  # labs(x = "Середній дохід", y = "Середній бал за тест") +
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic() +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 20))
+```
+
+```{r}
+model_1_1 <- lm(formula=popularity ~ energy + danceability + false_explicit, data=data_pop_not_null)
+model_1_1_hc1 <- coeftest(model_1_1, vcov. = hccm(model_1_1, type = "hc1"))
+```
+
+Існує сильна кореляція між змінними energy та loudness. Включимо loudness до модели як контрольну змінну для зменшення OVB.
+```{r}
+model_2_1 <- lm(formula=popularity ~ energy + danceability + false_explicit + loudness, data=data_pop_not_null)
+model_2_1_hc1 <- coeftest(model_2_1, vcov. = hccm(model_2_1, type = "hc1"))
+```
+
+Існує сильна кореляція між змінними energy та acousticness. Включимо acousticness до модели як контрольну змінну для зменшення OVB.
+```{r}
+model_3_1 <- lm(formula=popularity ~ energy + danceability + false_explicit + loudness + acousticness, data=data_pop_not_null)
+model_3_1_hc1 <- coeftest(model_3_1, vcov. = hccm(model_3_1, type = "hc1"))
+```
+
+```{r}
+stargazer(model_1_1, model_1_1_hc1, model_2_1, model_2_1_hc1, type = "html", digits = 3)
+```
+
+Існує доволі сильна кореляція між змінними danceability та valence. Включимо valence до модели як контрольну змінну для зменшення OVB.
+```{r}
+model_4_1 <- lm(formula=popularity ~ energy + danceability + false_explicit + loudness + acousticness + valence, data=data_pop_not_null)
+model_4_1_hc1 <- coeftest(model_4_1, vcov. = hccm(model_4_1, type = "hc1"))
+```
+
+```{r}
+model_5_1 <- lm(formula=popularity ~ energy + I(energy^2) + danceability + false_explicit + loudness + acousticness + valence, data=data_pop_not_null)
+model_5_1_hc1 <- coeftest(model_5_1, vcov. = hccm(model_5_1, type = "hc1"))
+```
+
+```{r}
+model_6_1 <- lm(formula=popularity ~ energy + I(energy^2) + danceability + I(danceability^2) + false_explicit + loudness + acousticness + valence, data=data_pop_not_null)
+model_6_1_hc1 <- coeftest(model_6_1, vcov. = hccm(model_6_1, type = "hc1"))
+```
+
+```{r}
+model_7_1 <- lm(formula=popularity ~ energy*false_explicit + I(energy^2) + danceability + I(danceability^2) + loudness + acousticness + valence, data=data_pop_not_null)
+model_7_1_hc1 <- coeftest(model_7_1, vcov. = hccm(model_7_1, type = "hc1"))
+```
+
+```{r}
+model_8_1 <- lm(formula=popularity ~ energy*false_explicit + I(energy^2) + danceability*false_explicit + I(danceability^2) + loudness + acousticness + valence, data=data_pop_not_null)
+model_8_1_hc1 <- coeftest(model_8_1, vcov. = hccm(model_8_1, type = "hc1"))
+```
+
+```{r}
+stargazer(model_3_1, model_3_1_hc1, model_4_1, model_4_1_hc1, type = "html", digits = 3)
+```
+
+```{r}
+stargazer(model_5_1, model_5_1_hc1, model_6_1, model_6_1_hc1, type = "html", digits = 3)
+```
+
+```{r}
+stargazer(model_7_1, model_7_1_hc1, model_8_1, model_8_1_hc1, type = "html", digits = 3)
+```
+
+```{r}
+linearHypothesis(model_7_1, c("energy = 0", "I(energy^2) = 0"), vcov. = hccm(model_7_1, type = "hc1"))
+```
+
+```{r}
+linearHypothesis(model_7_1, c("danceability = 0", "I(danceability^2) = 0"), vcov. = hccm(model_7_1, type = "hc1"))
+```
+
+```{r}
+linearHypothesis(model_7_1, c("energy = 0", "energy:false_explicit = 0"), vcov. = hccm(model_7_1, type = "hc1"))
+```
+
+```{r}
+linearHypothesis(model_8_1, c("danceability = 0", "false_explicit:danceability = 0"), vcov. = hccm(model_8_1, type = "hc1"))
+```
